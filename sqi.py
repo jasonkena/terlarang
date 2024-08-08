@@ -26,7 +26,7 @@ def generate_slurm_script(partition):
 grep MemFree /proc/meminfo | awk '{{print $2, "/ 1000000"}}' | bc
 
 # https://unix.stackexchange.com/questions/659150/tmux-sessions-get-killed-on-ssh-logout
-setenv XDG_RUNTIME_DIR /run/user/$uid
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
 loginctl enable-linger adhinart
 #tmux new-session -d
 systemd-run --scope --user tmux new-session -d
@@ -81,6 +81,8 @@ def expand_nodes(s):
 
 
 def parse_reservations(scontrol_output):
+    if "No reservations in the system" in scontrol_output:
+        return []
     reservations = []
     reservation_blocks = scontrol_output.strip().split("\n\n")
 
