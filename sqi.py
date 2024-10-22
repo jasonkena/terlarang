@@ -21,6 +21,8 @@ def generate_slurm_script(partition):
 #SBATCH -n 1
 #SBATCH --cpus-per-task=48
 #SBATCH -t {}:00:00
+#SBATCH --error=/data/adhinart/tmp/main_%j.err
+#SBATCH --output=/data/adhinart/tmp/main_%j.out
 #SBATCH --exclusive
 {}
 grep MemFree /proc/meminfo | awk '{{print $2, "/ 1000000"}}' | bc
