@@ -77,10 +77,10 @@ def on_exit(selected, slurm_job_id, kill):
             else f"<@{DISCORD_UID}> process {selected} has exited, output saved to {output_dir}"
         },
     )
-    time.sleep(WAIT_FOR)
 
     # kill slurm
     if kill:
+        time.sleep(WAIT_FOR)
         run_command(["scancel", slurm_job_id])
 
 

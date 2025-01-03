@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
 import re
-import sys
 import subprocess
 from datetime import datetime
+from typing import Optional
+import argparse
 
 
-def generate_slurm_script(partition):
+def generate_slurm_script(
+    partition, mem_arg: Optional[int], cpus_arg: Optional[int], gpus_arg: Optional[int]
+):
+    # job will not be exclusive if any of the arguments are given
+    exclusive = all([mem_arg is None, cpus_arg is None, gpus_arg is None])
+    print(f"Exclusive: {exclusive}")
+
     is_gpu = any([partition in p for p in ["gpua100", "gpuv100", "weidf"]])
-    mem = {"gpua100": "240GB", "gpuv100": "185GB", "weidf": "495GB"}
-    mem = mem[partition] if is_gpu else "185GB"
+    if mem_arg is None:
+        mem = {"gpua100": "240GB", "gpuv100": "185GB", "weidf": "495GB"}
+        mem = mem[partition] if is_gpu else "185GB"
+    else:
+        mem = f"{mem_arg}GB"
+
+    if cpus_arg is None:
+        cpus = 48
+    else:
+        cpus = cpus_arg
+
+    if gpus_arg is None:
+        gpus = 4
+    else:
+        gpus = gpus_arg
 
     hours = max_hours_for_job(partition)
     print(f"Max hours for job: {hours}")
@@ -19,11 +39,11 @@ def generate_slurm_script(partition):
 #SBATCH -p {}
 #SBATCH --mem={}
 #SBATCH -n 1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task={}
 #SBATCH -t {}:00:00
 #SBATCH --error=/data/adhinart/tmp/main_%j.err
 #SBATCH --output=/data/adhinart/tmp/main_%j.out
-#SBATCH --exclusive
+{}
 {}
 grep MemFree /proc/meminfo | awk '{{print $2, "/ 1000000"}}' | bc
 
@@ -34,7 +54,12 @@ loginctl enable-linger adhinart
 systemd-run --scope --user tmux new-session -d
 
 sleep infinity""".format(
-        partition, mem, hours, "#SBATCH --gpus-per-node=4" if is_gpu else ""
+        partition,
+        mem,
+        cpus,
+        hours,
+        "#SBATCH --exclusive" if exclusive else "",
+        f"#SBATCH --gpus-per-node={gpus}" if is_gpu else "",
     )
 
     return script
@@ -171,13 +196,39 @@ def hours_to_furthest_time(furthest_time):
 
 
 if __name__ == "__main__":
-    # Check if the correct number of arguments is provided
-    if len(sys.argv) != 2:
-        print("Usage: python generate_and_submit_slurm_script.py <partition>")
-        sys.exit(1)
+    # Initialize the argument parser
+    parser = argparse.ArgumentParser(
+        description="Generate and submit a SLURM script for a specified partition."
+    )
 
-    partition = sys.argv[1]
-    slurm_script = generate_slurm_script(partition)
+    # Add arguments
+    parser.add_argument(
+        "partition", type=str, help="The SLURM partition to submit the job to."
+    )
+    parser.add_argument(
+        "--mem",
+        type=int,
+        help="Amount of memory (in GB) to allocate. Defaults to partition-specific values.",
+        default=None,
+    )
+    parser.add_argument(
+        "--cpus",
+        type=int,
+        help="Number of CPUs to allocate. Defaults to 48.",
+        default=None,
+    )
+    parser.add_argument(
+        "--gpus",
+        type=int,
+        help="Number of GPUs to allocate. Defaults to partition-specific values.",
+        default=None,
+    )
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Generate the SLURM script
+    slurm_script = generate_slurm_script(args.partition, args.mem, args.cpus, args.gpus)
 
     # Write the SLURM script to a file
     path = "/tmp/my_slurm_script.sl"
